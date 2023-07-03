@@ -4,6 +4,8 @@ Nuitka extractor is a tool to extract nuitka compiled Python executables. In par
 
 ## Usage
 
+Precompiled binaries can be downloaded from releases.
+
 Simply pass the path to the file as an argument.
 
 ```
