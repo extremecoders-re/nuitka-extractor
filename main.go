@@ -179,15 +179,15 @@ func (ne *NuitkaExecutable) Extract() {
 		fileSize = binary.LittleEndian.Uint64(fileSizeBuffer)
 
 		// TODO: 4 bytes crc32 is at this position
-        // if executable uses custom extraction directory
-        // 
-        // https://github.com/Nuitka/Nuitka/blob/c371b3/nuitka/build/static_src/OnefileBootstrap.c#L959
-        // https://github.com/Nuitka/Nuitka/blob/c371b3/nuitka/tools/onefile_compressor/OnefileCompressor.py#L184-L187
-        // https://github.com/Nuitka/Nuitka/blob/c371b3/nuitka/Options.py#L1538
+		// if executable uses custom extraction directory
+		//
+		// https://github.com/Nuitka/Nuitka/blob/c371b3/nuitka/build/static_src/OnefileBootstrap.c#L959
+		// https://github.com/Nuitka/Nuitka/blob/c371b3/nuitka/tools/onefile_compressor/OnefileCompressor.py#L184-L187
+		// https://github.com/Nuitka/Nuitka/blob/c371b3/nuitka/Options.py#L1538
 
 		// Basic path sanitization
-        extractionDir = strings.ReplaceAll(extractionDir, "..", "__")        
-        var outpath = filepath.Join(extractionDir, fn)
+		extractionDir = strings.ReplaceAll(extractionDir, "..", "__")
+		var outpath = filepath.Join(extractionDir, fn)
 		ne.dumpFile(fileSize, outpath)
 		total_files += 1
 	}
