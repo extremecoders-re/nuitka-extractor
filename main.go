@@ -31,7 +31,7 @@ type NuitkaExecutable struct {
 	path         string
 	fileType     FileType
 	fPtr         *os.File
-	decoder      io.Reader
+	streamReader io.Reader
 	compressFlag CompressionFlag
 }
 
@@ -129,7 +129,7 @@ func (ne *NuitkaExecutable) dumpFile(fileSize uint64, outpath string) {
 	remaining := int64(fileSize)
 
 	for {
-		nBytes, _ := io.CopyN(f, ne.decoder, remaining)
+		nBytes, _ := io.CopyN(f, ne.streamReader, remaining)
 		remaining -= nBytes
 		if remaining == 0 {
 			break
@@ -142,7 +142,7 @@ func (ne *NuitkaExecutable) readChunk(buf []byte) {
 	var read = 0
 
 	for {
-		nBytes, _ := ne.decoder.Read(buf[read:])
+		nBytes, _ := ne.streamReader.Read(buf[read:])
 		read += nBytes
 		if read == len(buf) {
 			break
@@ -151,12 +151,17 @@ func (ne *NuitkaExecutable) readChunk(buf []byte) {
 }
 
 func (ne *NuitkaExecutable) Extract() {
-	var err error
-	ne.decoder, err = zstd.NewReader(ne.fPtr)
-	if err != nil {
-		fmt.Println("[!] Couldn't initialize zstd for decompression")
-		return
+	if ne.compressFlag == COMPRESSED {
+		var err error
+		ne.streamReader, err = zstd.NewReader(ne.fPtr)
+		if err != nil {
+			fmt.Println("[!] Couldn't initialize zstd for decompression")
+			return
+		}
+	} else {
+		ne.streamReader = ne.fPtr
 	}
+
 	fmt.Println("[+] Beginning extraction...")
 	var extractionDir = ne.path + "_extracted"
 	os.Mkdir(extractionDir, 0755)
