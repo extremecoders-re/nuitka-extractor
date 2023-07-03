@@ -1,0 +1,25 @@
+name: Build binaries for Linux & Windows
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: |
+          GOOS=linux GOARCH=amd64 go build -ldflags "-s -w"
+          GOOS=windows GOARCH=amd64 go build -ldflags "-s -w"
+
+      - name: Set release date
+        run: echo "RELEASE_DATE=$(date -u +%Y.%m.%d)" >> ${GITHUB_ENV}
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          name: ${{ env.RELEASE_DATE }}
+          tag:  ${{ env.RELEASE_DATE }}
+          artifacts: "nuitka-extractor.exe,nuitka-extractor"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          allowUpdates: true
+          draft: true
+
