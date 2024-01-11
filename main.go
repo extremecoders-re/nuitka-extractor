@@ -43,14 +43,14 @@ func (ne *NuitkaExecutable) Check() bool {
 	var err error
 	ne.fPtr, err = os.Open(ne.path)
 	if err != nil {
-		fmt.Println("[!] Couldn't open %s", ne.path)
+		fmt.Printf("[!] Couldn't open %s\n", ne.path)
 		return false
 	}
 	fmt.Println("[+] Processing", ne.path)
 
 	// Rudimentary file check logic
 	var magic = make([]byte, 4)
-	_, err = ne.fPtr.Read(magic)
+	ne.fPtr.Read(magic)
 	if magic[0] == 0x4d && magic[1] == 0x5a {
 		ne.fileType = PE
 		fmt.Println("[+] File type: PE")
@@ -62,7 +62,17 @@ func (ne *NuitkaExecutable) Check() bool {
 		return false
 	}
 
-	streamPosition, _ := ne.fPtr.Seek(-8, os.SEEK_END)
+	var streamPosition int64
+	if ne.fileType == PE {
+		streamPosition = LocateRCDataEnd(ne.path)
+		if streamPosition == -1 {
+			fmt.Println("[!] Failed to locate Nuitka data in PE resources")
+			return false
+		}
+		streamPosition, _ = ne.fPtr.Seek(streamPosition-8, io.SeekStart)
+	} else {
+		streamPosition, _ = ne.fPtr.Seek(-8, io.SeekEnd)
+	}
 
 	var payLoadSize int64
 	var payloadSizeBuf = make([]byte, 8)
@@ -71,7 +81,7 @@ func (ne *NuitkaExecutable) Check() bool {
 	fmt.Println("[+] Payload size:", payLoadSize, "bytes")
 
 	payLoadStartPos := streamPosition - payLoadSize
-	ne.fPtr.Seek(payLoadStartPos, os.SEEK_SET)
+	ne.fPtr.Seek(payLoadStartPos, io.SeekStart)
 
 	var nuitkaMagic = make([]byte, 3)
 	ne.fPtr.Read(nuitkaMagic)
