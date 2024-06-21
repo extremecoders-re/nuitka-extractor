@@ -1,4 +1,4 @@
-module nuitka-extractor
+module github.com/extremecoders-re/nuitka-extractor
 
 go 1.19
 
