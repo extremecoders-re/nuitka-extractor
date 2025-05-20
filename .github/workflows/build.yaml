@@ -1,14 +1,16 @@
-name: Build binaries for Linux & Windows
+name: Build binaries for Linux, Windows & macOS
 on: workflow_dispatch
 
 jobs:
   build:
+    name: Build for Linux & Windows
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
       - run: |
-          GOOS=linux GOARCH=amd64 go build -ldflags "-s -w"
-          GOOS=windows GOARCH=amd64 go build -ldflags "-s -w"
+          GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o nuitka-extractor
+          GOOS=windows GOARCH=amd64 go build -ldflags "-s -w" -o nuitka-extractor.exe
 
       - name: Set release date
         run: echo "RELEASE_DATE=$(date -u +%Y.%m.%d)" >> ${GITHUB_ENV}
@@ -23,3 +25,34 @@ jobs:
           allowUpdates: true
           draft: true
 
+  build-macos:
+    name: Build for macOS Universal
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Build for macOS x86_64
+        run: |
+          GOOS=darwin GOARCH=amd64 go build -ldflags "-s -w" -o nuitka-extractor-amd64
+
+      - name: Build for macOS arm64
+        run: |
+          GOOS=darwin GOARCH=arm64 go build -ldflags "-s -w" -o nuitka-extractor-arm64
+
+      - name: Combine into Universal Binary
+        run: |
+          lipo -create -output nuitka-extractor-macos nuitka-extractor-amd64 nuitka-extractor-arm64
+          chmod +x nuitka-extractor-macos
+
+      - name: Set release date
+        run: echo "RELEASE_DATE=$(date -u +%Y.%m.%d)" >> ${GITHUB_ENV}
+
+      - name: Upload macOS Universal Binary to Release
+        uses: ncipollo/release-action@v1
+        with:
+          name: ${{ env.RELEASE_DATE }}
+          tag:  ${{ env.RELEASE_DATE }}
+          artifacts: "nuitka-extractor-macos"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          allowUpdates: true
+          draft: true
