@@ -103,31 +103,34 @@ func (ne *NuitkaExecutable) Check() bool {
 }
 
 func (ne *NuitkaExecutable) readFileName() string {
-	var buffer []byte
+	var fileNameBytes []byte
 	if ne.fileType == PE {
-		buffer = make([]byte, 2)
-	} else {
-		buffer = make([]byte, 1)
-	}
-
-	var fileName string
-
-	for {
-		ne.readChunk(buffer)
-		if buffer[0] == 0 {
-			break
+		buffer := make([]byte, 2)
+		for {
+			ne.readChunk(buffer)
+			if buffer[0] == 0 && buffer[1] == 0 {
+				break
+			}
+			fileNameBytes = append(fileNameBytes, buffer...)
 		}
-		fileName += string(buffer)
-	}
-	if ne.fileType == PE {
 		utf16 := unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM).NewDecoder()
-		fileName, _ = utf16.String(fileName)
+		fileName, _ := utf16.String(string(fileNameBytes))
+		return fileName
+	} else {
+		buffer := make([]byte, 1)
+		for {
+			ne.readChunk(buffer)
+			if buffer[0] == 0 {
+				break
+			}
+			fileNameBytes = append(fileNameBytes, buffer[0])
+		}
+		return string(fileNameBytes)
 	}
-	return fileName
 }
 
 func (ne *NuitkaExecutable) dumpFile(fileSize uint64, outpath string) {
-	dir, _ := filepath.Split(outpath)
+	dir := filepath.Dir(outpath)
 	os.MkdirAll(dir, 0755)
 
 	f, err := os.Create(outpath)
@@ -135,29 +138,13 @@ func (ne *NuitkaExecutable) dumpFile(fileSize uint64, outpath string) {
 		fmt.Println("[!] Couldn't write", outpath)
 		return
 	}
+	defer f.Close()
 
-	remaining := int64(fileSize)
-
-	for {
-		nBytes, _ := io.CopyN(f, ne.streamReader, remaining)
-		remaining -= nBytes
-		if remaining == 0 {
-			break
-		}
-	}
-	f.Close()
+	io.CopyN(f, ne.streamReader, int64(fileSize))
 }
 
 func (ne *NuitkaExecutable) readChunk(buf []byte) {
-	var read = 0
-
-	for {
-		nBytes, _ := ne.streamReader.Read(buf[read:])
-		read += nBytes
-		if read == len(buf) {
-			break
-		}
-	}
+	io.ReadFull(ne.streamReader, buf)
 }
 
 func (ne *NuitkaExecutable) Extract() {
@@ -174,7 +161,7 @@ func (ne *NuitkaExecutable) Extract() {
 
 	fmt.Println("[+] Beginning extraction...")
 	var extractionDir = ne.path + "_extracted"
-	os.Mkdir(extractionDir, 0755)
+	os.MkdirAll(extractionDir, 0755)
 
 	total_files := 0
 
@@ -183,6 +170,11 @@ func (ne *NuitkaExecutable) Extract() {
 		if fn == "" {
 			break
 		}
+
+		//https://github.com/Nuitka/Nuitka/blob/develop/nuitka/build/static_src/OnefileBootstrap.c
+		//https://github.com/Nuitka/Nuitka/blob/develop/nuitka/tools/onefile_compressor/OnefileCompressor.py
+		//https://github.com/Nuitka/Nuitka/blob/develop/nuitka/options/Options.py
+
 		if ne.fileType == ELF {
 			var fileFlags = make([]byte, 1)
 			ne.readChunk(fileFlags)
@@ -193,16 +185,16 @@ func (ne *NuitkaExecutable) Extract() {
 		ne.readChunk(fileSizeBuffer)
 		fileSize = binary.LittleEndian.Uint64(fileSizeBuffer)
 
-		// TODO: 4 bytes crc32 is at this position
-		// if executable uses custom extraction directory
-		//
-		// https://github.com/Nuitka/Nuitka/blob/c371b3/nuitka/build/static_src/OnefileBootstrap.c#L959
-		// https://github.com/Nuitka/Nuitka/blob/c371b3/nuitka/tools/onefile_compressor/OnefileCompressor.py#L184-L187
-		// https://github.com/Nuitka/Nuitka/blob/c371b3/nuitka/Options.py#L1538
+		// 4 bytes for CRC32 or ArchiveSize (added in newer Nuitka versions)
+		var extraHeader = make([]byte, 4)
+		ne.readChunk(extraHeader)
 
-		// Basic path sanitization
-		extractionDir = strings.ReplaceAll(extractionDir, "..", "__")
-		var outpath = filepath.Join(extractionDir, fn)
+		fnNormalized := strings.ReplaceAll(fn, "\\", "/")
+		fnNormalized = strings.ReplaceAll(fnNormalized, "..", "__")
+		
+		var outpath = filepath.Join(extractionDir, fnNormalized)
+		// fmt.Printf("[+] (%d) Extracting: %s\n", total_files+1, fnNormalized)
+		
 		ne.dumpFile(fileSize, outpath)
 		total_files += 1
 	}
